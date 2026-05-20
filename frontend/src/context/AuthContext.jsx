@@ -1,67 +1,174 @@
-/* eslint-disable react-refresh/only-export-components */
-import { createContext, useContext, useState } from "react";
+import {
+  createContext,
+  useState,
+  useContext,
+  useEffect,
+} from "react";
+
 import { useNavigate } from "react-router-dom";
-import showSnackbar from "../utils/snackbar";
 
-const AuthContext = createContext(null);
+import { authService } from "../services/authService";
 
-const FIXED_USER = {
-  nome: "Leonardo Stuani",
-  login: "abc",
-  grupo: "Administrador",
-  email: "leo@uniplaclages.edu.br",
-  telefone: "49999999999",
-  avatar: "/user-face.png",
-};
+// =========================================
+// Criação do contexto
+// =========================================
+
+const AuthContext = createContext();
+
+// =========================================
+// Provedor do contexto
+// =========================================
 
 export const AuthProvider = ({ children }) => {
+  const [isAuthenticated, setIsAuthenticated] =
+    useState(false);
+
+  const [user, setUser] = useState(null);
+
+  const [loading, setLoading] = useState(true);
+
   const navigate = useNavigate();
-  const [isAuthenticated, setIsAuthenticated] = useState(
-    () => sessionStorage.getItem("loginRealizado") === "true",
-  );
-  const [usuario, setUsuario] = useState(() => {
-    const savedUser = sessionStorage.getItem("usuario");
-    return savedUser ? JSON.parse(savedUser) : null;
-  });
 
-  const login = (loginValue, senha) => {
-    const normalizedLogin = loginValue.trim().toLowerCase();
-    const normalizedPassword = senha.trim();
+  // =========================================
+  // Verificar autenticação ao carregar o componente
+  // =========================================
 
-    if (normalizedLogin !== "abc" || normalizedPassword !== "bolinhas") {
-      showSnackbar("Usuario ou senha invalidos.", "error");
+  useEffect(() => {
+    const checkAuth = () => {
+      if (authService.isAuthenticated()) {
+        setIsAuthenticated(true);
+
+        // Buscar dados do usuário logado
+        authService
+          .getUserData()
+          .then((userData) => {
+            if (userData) {
+              setUser(userData);
+            }
+          });
+      }
+
+      setLoading(false);
+    };
+
+    checkAuth();
+  }, []);
+
+  // =========================================
+  // Função para login com API real
+  // =========================================
+
+  const login = async (cpf, senha) => {
+    try {
+      setLoading(true);
+
+      // Chama o service de autenticação
+      // para fazer o login
+      const result =
+        await authService.login(
+          cpf,
+          senha
+        );
+
+      if (result.success) {
+        setIsAuthenticated(true);
+
+        // Buscar dados do usuário após login
+        const userData =
+          await authService.getUserData();
+
+        setUser(userData);
+
+        navigate("/home");
+
+        return true;
+      } else {
+        // Emite evento para SnackbarGlobal
+        window.dispatchEvent(
+          new CustomEvent(
+            "showSnackbar",
+            {
+              detail: {
+                message: result.error,
+                severity: "error",
+              },
+            }
+          )
+        );
+
+        return false;
+      }
+    } catch (error) {
+      console.error(
+        "Erro no login:",
+        error
+      );
+
+      window.dispatchEvent(
+        new CustomEvent(
+          "showSnackbar",
+          {
+            detail: {
+              message:
+                "Erro ao conectar com o servidor",
+              severity: "error",
+            },
+          }
+        )
+      );
+
       return false;
+    } finally {
+      setLoading(false);
     }
-
-    setIsAuthenticated(true);
-    setUsuario(FIXED_USER);
-    sessionStorage.setItem("loginRealizado", "true");
-    sessionStorage.setItem("usuario", JSON.stringify(FIXED_USER));
-    showSnackbar("Login realizado com sucesso.", "success");
-    navigate("/home", { replace: true });
-    return true;
   };
+
+  // =========================================
+  // Função para logout
+  // =========================================
 
   const logout = () => {
+    authService.logout();
+
     setIsAuthenticated(false);
-    setUsuario(null);
-    sessionStorage.removeItem("loginRealizado");
-    sessionStorage.removeItem("usuario");
-    showSnackbar("Sessao encerrada com sucesso.", "info");
-    navigate("/login", { replace: true });
+
+    setUser(null);
   };
 
+  // =========================================
+  // Objeto com os valores e funções do contexto
+  // =========================================
+
+
+  // Função para obter as iniciais do usuário
   const getIniciais = () => {
-    if (!usuario?.nome) return "US";
-    const partes = usuario.nome.split(" ").filter(Boolean);
-    const primeira = partes[0]?.[0] ?? "U";
-    const ultima = partes[partes.length - 1]?.[0] ?? "S";
-    return `${primeira}${ultima}`.toUpperCase();
+    if (!user || !user.nome) return "?";
+    const nomes = user.nome.trim().split(" ");
+    if (nomes.length === 1) return nomes[0][0].toUpperCase();
+    return (nomes[0][0] + nomes[nomes.length - 1][0]).toUpperCase();
   };
 
-  const value = { isAuthenticated, usuario, login, logout, getIniciais };
+  const value = {
+    isAuthenticated,
+    user,
+    usuario: user, // compatibilidade com Navbar
+    loading,
+    login,
+    logout,
+    getIniciais,
+    isTokenExpiringSoon: authService.isTokenExpiringSoon(),
+  };
 
-  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+  return (
+    <AuthContext.Provider value={value}>
+      {children}
+    </AuthContext.Provider>
+  );
 };
 
-export const useAuth = () => useContext(AuthContext);
+// =========================================
+// Hook para usar o contexto
+// =========================================
+
+export const useAuth = () =>
+  useContext(AuthContext);

@@ -162,13 +162,7 @@ const LoginForm = () => {
           </Button>
         </Box>
 
-        <Typography
-          variant="caption"
-          color="text.secondary"
-          sx={{ display: "block", textAlign: "center", mt: 3 }}
-        >
-          Usuario: abc | Senha: bolinhas
-        </Typography>
+        {/* Texto de mock removido */}
       </Paper>
     </Box>
   );
