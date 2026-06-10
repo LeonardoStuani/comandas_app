@@ -1,102 +1,130 @@
-import { useState } from 'react';
-import {
-  Table, TableBody, TableCell, TableContainer, TableHead, TableRow,
-  Paper, Button, Card, CardContent, Typography, Box, Divider
-} from '@mui/material';
-import { FiberNew } from '@mui/icons-material';
-import { useNavigate } from 'react-router-dom';
-import PageLayout from '../components/common/PageLayout';
-import ActionButtons from '../components/common/ActionButtons';
-import ConfirmDialog from '../components/common/ConfirmDialog';
-import showSnackbar from '../utils/snackbar';
+import { useEffect, useState, useCallback } from "react";
+import { useNavigate } from "react-router-dom";
+import { Plus, Pencil, Trash2 } from "lucide-react";
+import ConfirmDialog from "../components/common/ConfirmDialog";
+import showSnackbar from "../utils/snackbar";
+import { ehDoGrupo } from "../utils/grupos";
+import { useAuth } from "../context/AuthContext";
+import { listProdutos, deleteProduto } from "../services/produtoService";
+import { apiErrorMessage } from "../services/api";
+import { produtoFotoSrc } from "../utils/produtoFoto";
 
-const mockProdutos = [
-  { id: 1, nome: 'Hamburguer Classico', descricao: 'Pao, carne, alface, tomate e queijo', valor_unitario: 25.9 },
-  { id: 2, nome: 'Batata Frita', descricao: 'Porcao media de batata crocante', valor_unitario: 12.5 },
-  { id: 3, nome: 'Refrigerante', descricao: 'Lata 350 ml', valor_unitario: 8.0 },
-  { id: 4, nome: 'X-Bacon Especial', descricao: 'Hamburguer artesanal com bacon', valor_unitario: 32.9 },
-];
-
-const formatCurrency = (v) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v);
+const fmt = (v) =>
+  new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(Number(v) || 0);
 
 const ProdutoList = () => {
   const navigate = useNavigate();
+  const { usuario } = useAuth();
+  const podeGerenciar = ehDoGrupo(usuario, [1]);
+  const [produtos, setProdutos] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [selected, setSelected] = useState(null);
 
-  const handleDelete = (item) => { setSelected(item); setConfirmOpen(true); };
-  const handleDeleteConfirm = () => {
-    showSnackbar(`Produto "${selected?.nome}" removido da lista visual.`, 'success');
-    setConfirmOpen(false);
-  };
-  const handleEdit = (item) => navigate(`/produto/${item.id}`);
-  const handleView = (item) => navigate(`/produto/${item.id}?view=true`);
+  const carregar = useCallback(async () => {
+    try {
+      setProdutos(await listProdutos());
+    } catch (error) {
+      showSnackbar(apiErrorMessage(error, "Erro ao carregar produtos."), "error");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
-  const actions = (
-    <Button variant="contained" color="secondary" onClick={() => navigate('/produto')} startIcon={<FiberNew />} sx={{ fontWeight: 600 }}>
-      Novo
-    </Button>
-  );
+  useEffect(() => { carregar(); }, [carregar]);
+
+  const handleDelete = async () => {
+    try {
+      await deleteProduto(selected.id_produto);
+      showSnackbar(`Produto "${selected.nome}" removido.`, "success");
+      setConfirmOpen(false);
+      setSelected(null);
+      carregar();
+    } catch (error) {
+      showSnackbar(apiErrorMessage(error, "Erro ao remover produto."), "error");
+      setConfirmOpen(false);
+    }
+  };
 
   return (
-    <PageLayout title="Produtos" actions={actions} titleImage="/user-face.png">
-      <Box sx={{ display: { xs: 'none', md: 'block' } }}>
-        <TableContainer component={Paper} elevation={0} sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 2 }}>
-          <Table>
-            <TableHead sx={{ bgcolor: 'grey.50' }}>
-              <TableRow>
-                {['Nome', 'Descricao', 'Valor Unitario', 'Acoes'].map((h) => (
-                  <TableCell key={h} sx={{ fontWeight: 700, color: 'text.secondary', fontSize: '0.8rem', textTransform: 'uppercase', letterSpacing: 0.5 }}>
-                    {h}
-                  </TableCell>
-                ))}
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {mockProdutos.map((p) => (
-                <TableRow key={p.id} hover sx={{ '&:last-child td': { borderBottom: 0 } }}>
-                  <TableCell sx={{ fontWeight: 600 }}>{p.nome}</TableCell>
-                  <TableCell>{p.descricao}</TableCell>
-                  <TableCell>
-                    <Typography fontWeight={700} color="success.main">{formatCurrency(p.valor_unitario)}</Typography>
-                  </TableCell>
-                  <TableCell>
-                    <ActionButtons item={p} onView={handleView} onEdit={handleEdit} onDelete={handleDelete} />
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </TableContainer>
-      </Box>
+    <div className="page-content">
+      {/* Header */}
+      <div className="page-header">
+        <div>
+          <div className="section-eyebrow">cardápio</div>
+          <h1 style={{ fontSize: 28, fontWeight: 600, letterSpacing: "-0.025em", margin: "4px 0 0", color: "var(--ink)" }}>
+            Produtos <span style={{ color: "var(--ink-3)", fontWeight: 400 }}>· {produtos.length}</span>
+          </h1>
+        </div>
+        {podeGerenciar && (
+          <div className="page-header-actions">
+            <button className="btn btn-accent btn-lg" onClick={() => navigate("/produto")}>
+              <Plus size={16} /> Novo produto
+            </button>
+          </div>
+        )}
+      </div>
 
-      <Box sx={{ display: { xs: 'block', md: 'none' } }}>
-        {mockProdutos.map((p) => (
-          <Card key={p.id} sx={{ mb: 2, borderRadius: 3 }} elevation={2}>
-            <CardContent sx={{ p: 2 }}>
-              <Typography variant="subtitle1" fontWeight={700}>{p.nome}</Typography>
-              <Divider sx={{ my: 1.5 }} />
-              <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>{p.descricao}</Typography>
-              <Typography variant="body2" color="success.main" fontWeight={700} sx={{ mb: 1.5 }}>
-                {formatCurrency(p.valor_unitario)}
-              </Typography>
-              <Box sx={{ display: 'flex', justifyContent: 'flex-end' }}>
-                <ActionButtons item={p} onView={handleView} onEdit={handleEdit} onDelete={handleDelete} />
-              </Box>
-            </CardContent>
-          </Card>
-        ))}
-      </Box>
+      {/* Grid */}
+      {loading ? (
+        <div style={{ padding: 40, textAlign: "center", color: "var(--ink-3)" }}>Carregando…</div>
+      ) : produtos.length === 0 ? (
+        <div className="card card-pad" style={{ textAlign: "center", color: "var(--ink-3)" }}>
+          Nenhum produto cadastrado.
+        </div>
+      ) : (
+        <div className="card-grid-4">
+          {produtos.map((p) => (
+            <div
+              key={p.id_produto}
+              className="card"
+              style={{ padding: 14, display: "flex", flexDirection: "column", gap: 12 }}
+            >
+              {produtoFotoSrc(p.foto) ? (
+                <img
+                  src={produtoFotoSrc(p.foto)}
+                  alt={p.nome}
+                  loading="lazy"
+                  style={{ height: 110, width: "100%", objectFit: "cover", borderRadius: 8, display: "block" }}
+                />
+              ) : (
+                <div className="hatch" style={{ height: 110 }}>sem foto</div>
+              )}
+              <div>
+                <div style={{ fontSize: 14, fontWeight: 600 }}>{p.nome}</div>
+                <div style={{ fontSize: 11, color: "var(--ink-3)", marginTop: 2, minHeight: 28, overflow: "hidden" }}>
+                  {p.descricao}
+                </div>
+                <div className="mono" style={{ fontSize: 18, fontWeight: 700, marginTop: 10, color: "var(--accent)", letterSpacing: "-0.02em" }}>
+                  {fmt(p.valor_unitario)}
+                </div>
+              </div>
+              {podeGerenciar && (
+                <div style={{ display: "flex", gap: 6, marginTop: "auto" }}>
+                  <button className="btn btn-ghost btn-sm" style={{ flex: 1 }}
+                    onClick={() => navigate(`/produto/${p.id_produto}`)}>
+                    <Pencil size={13} /> Editar
+                  </button>
+                  <button className="btn-icon" style={{ width: 32, height: 32 }} title="Excluir"
+                    onClick={() => { setSelected(p); setConfirmOpen(true); }}>
+                    <Trash2 size={14} />
+                  </button>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
 
       <ConfirmDialog
         open={confirmOpen}
         title="Excluir Produto"
         message={`Tem certeza que deseja excluir "${selected?.nome}"?`}
         confirmLabel="Excluir"
-        onConfirm={handleDeleteConfirm}
+        onConfirm={handleDelete}
         onCancel={() => setConfirmOpen(false)}
       />
-    </PageLayout>
+    </div>
   );
 };
 

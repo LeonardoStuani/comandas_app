@@ -1,66 +1,76 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Controller, useForm } from "react-hook-form";
-import {
-  Box,
-  Button,
-  Chip,
-  Grid,
-  InputAdornment,
-  Paper,
-  TextField,
-  Typography,
-} from "@mui/material";
-import { Badge, Email, Person, Phone } from "@mui/icons-material";
+import { Box, Button, Chip, Grid, InputAdornment, Paper, TextField, Typography } from "@mui/material";
+import { Badge, Fingerprint, Person, Phone } from "@mui/icons-material";
 import { useAuth } from "../context/AuthContext";
 import PageLayout from "../components/common/PageLayout";
 import FormSectionTitle from "../components/common/FormSectionTitle";
 import { useValidationRules } from "../hooks/useValidationRules";
-import { applyMaskTelefone } from "../hooks/useMasks";
+import { applyMaskCPF, applyMaskTelefone, stripMask } from "../hooks/useMasks";
 import showSnackbar from "../utils/snackbar";
+import { getFuncionario, updateFuncionario } from "../services/funcionarioService";
+import { apiErrorMessage } from "../services/api";
 
 const PerfilPage = () => {
   const { usuario } = useAuth();
   const rules = useValidationRules();
   const nomeRef = useRef(null);
+  const [saving, setSaving] = useState(false);
 
   const {
     control,
     handleSubmit,
+    reset,
     formState: { errors },
   } = useForm({
-    defaultValues: {
-      nome: usuario?.nome || "",
-      email: usuario?.email || "",
-      telefone: usuario?.telefone || "",
-    },
+    defaultValues: { nome: "", telefone: "", cpf: "", matricula: "" },
   });
 
   useEffect(() => {
-    nomeRef.current?.focus();
-  }, []);
+    if (!usuario?.id) return;
+    getFuncionario(usuario.id)
+      .then((f) =>
+        reset({
+          nome: f.nome ?? "",
+          telefone: applyMaskTelefone(f.telefone ?? ""),
+          cpf: applyMaskCPF(f.cpf ?? ""),
+          matricula: f.matricula ?? "",
+        }),
+      )
+      .catch(() =>
+        reset({
+          nome: usuario.nome ?? "",
+          telefone: "",
+          cpf: applyMaskCPF(usuario.cpf ?? ""),
+          matricula: usuario.matricula ?? "",
+        }),
+      );
+  }, [usuario, reset]);
 
-  const onSubmit = () => {
-    showSnackbar("Perfil salvo com sucesso.", "success");
+  const onSubmit = async (values) => {
+    setSaving(true);
+    try {
+      await updateFuncionario(usuario.id, {
+        nome: values.nome.trim(),
+        telefone: stripMask(values.telefone),
+      });
+      showSnackbar("Perfil salvo com sucesso.", "success");
+    } catch (error) {
+      showSnackbar(apiErrorMessage(error, "Não foi possível salvar (requer permissão de administrador)."), "error");
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
     <PageLayout title="Perfil" maxWidth="md">
       <Paper
         elevation={0}
-        sx={{
-          p: 3,
-          mb: 3,
-          borderRadius: 3,
-          border: "1px solid",
-          borderColor: "divider",
-          bgcolor: "background.default",
-        }}
+        sx={{ p: 3, mb: 3, borderRadius: 3, border: "1px solid", borderColor: "divider", bgcolor: "background.default" }}
       >
-        <Typography variant="h6" fontWeight={700}>
-          Usuario autenticado
-        </Typography>
+        <Typography variant="h6" fontWeight={700}>Usuário autenticado</Typography>
         <Typography color="text.secondary">{usuario?.nome}</Typography>
-        <Chip label={usuario?.grupo || "Administrador"} color="secondary" sx={{ mt: 1.5 }} />
+        <Chip label={usuario?.grupoLabel || "—"} color="secondary" sx={{ mt: 1.5 }} />
       </Paper>
 
       <Box component="form" onSubmit={handleSubmit(onSubmit)} noValidate>
@@ -77,7 +87,6 @@ const PerfilPage = () => {
                   inputRef={nomeRef}
                   fullWidth
                   label="Nome completo *"
-                  title="Seu nome completo"
                   inputProps={{ maxLength: 100 }}
                   error={!!errors.nome}
                   helperText={errors.nome?.message || `${field.value?.length || 0}/100`}
@@ -94,38 +103,41 @@ const PerfilPage = () => {
           </Grid>
 
           <Grid item xs={12} md={4}>
-            <TextField
-              fullWidth
-              disabled
-              label="Login"
-              value={usuario?.login || ""}
-              InputProps={{
-                startAdornment: (
-                  <InputAdornment position="start">
-                    <Badge sx={{ color: "text.disabled" }} />
-                  </InputAdornment>
-                ),
-              }}
+            <Controller
+              name="matricula"
+              control={control}
+              render={({ field }) => (
+                <TextField
+                  {...field}
+                  fullWidth
+                  disabled
+                  label="Matrícula"
+                  InputProps={{
+                    startAdornment: (
+                      <InputAdornment position="start">
+                        <Badge sx={{ color: "text.disabled" }} />
+                      </InputAdornment>
+                    ),
+                  }}
+                />
+              )}
             />
           </Grid>
 
           <Grid item xs={12} md={6}>
             <Controller
-              name="email"
+              name="cpf"
               control={control}
-              rules={rules.email}
               render={({ field }) => (
                 <TextField
                   {...field}
                   fullWidth
-                  label="E-mail *"
-                  inputProps={{ maxLength: 100 }}
-                  error={!!errors.email}
-                  helperText={errors.email?.message || `${field.value?.length || 0}/100`}
+                  disabled
+                  label="CPF"
                   InputProps={{
                     startAdornment: (
                       <InputAdornment position="start">
-                        <Email sx={{ color: "text.disabled" }} />
+                        <Fingerprint sx={{ color: "text.disabled" }} />
                       </InputAdornment>
                     ),
                   }}
@@ -163,8 +175,8 @@ const PerfilPage = () => {
         </Grid>
 
         <Box sx={{ display: "flex", justifyContent: "flex-end", mt: 4 }}>
-          <Button type="submit" variant="contained">
-            Salvar
+          <Button type="submit" variant="contained" disabled={saving}>
+            {saving ? "Salvando…" : "Salvar"}
           </Button>
         </Box>
       </Box>

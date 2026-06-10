@@ -27,3 +27,10 @@ dist-ssr
 .env.*
 !.env.example
 .gstack/
+
+# Claude Code (configuração/memória local)
+.claude/
+
+# Arquivos temporários / dumps
+openapi_tmp.json
+*_tmp.json

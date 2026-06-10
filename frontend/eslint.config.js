@@ -17,5 +17,11 @@ export default defineConfig([
       globals: globals.browser,
       parserOptions: { ecmaFeatures: { jsx: true } },
     },
+    rules: {
+      // Buscar dados da API ao montar a página (useEffect -> carregar() -> setState)
+      // é o padrão usado em todas as listagens deste app. A regra do React Compiler
+      // sinaliza esse caso como "setState síncrono no efeito"; aqui é intencional.
+      'react-hooks/set-state-in-effect': 'off',
+    },
   },
 ])
