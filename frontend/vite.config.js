@@ -3,21 +3,22 @@ import react from '@vitejs/plugin-react'
 
 // https://vite.dev/config/
 export default defineConfig(({ mode }) => {
-  const env = loadEnv(mode, process.cwd(), '')
+  // envDir '.' evita depender do global `process` (lint no-undef)
+  const env = loadEnv(mode, '.', '')
+  const target = env.VITE_PROXY_TARGET || 'https://localhost:8443'
+  const secure = env.VITE_PROXY_SECURE === 'true'
 
   return {
     plugins: [react()],
-    // Configuração do Proxy Vite para evitar problemas de SSL/TLS
     server: {
       proxy: {
+        // Tudo que começa com /api é encaminhado para a API (HTTPS na 8443).
+        // O prefixo /api é removido antes de chegar na API.
         '/api': {
-        // endereço da api - lido exclusivamente do .env
-        target: env.VITE_PROXY_TARGET,
-        // muda o host para o target
-        changeOrigin: true,
-        // ignora ou não a verificação SSL/TLS - lido exclusivamente do .env
-        secure: env.VITE_PROXY_SECURE === 'true', // operação booleana para converter string para boolean
-        rewrite: (path) => path.replace(/^\/api/, ''),
+          target,
+          changeOrigin: true,
+          secure, // false em dev para aceitar certificado auto-assinado
+          rewrite: (path) => path.replace(/^\/api/, ''),
         },
       },
     },

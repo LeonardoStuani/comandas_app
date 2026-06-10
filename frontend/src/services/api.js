@@ -1,205 +1,101 @@
-import axios from 'axios';
-import { BASE_URL, TIMEOUT, API_ENDPOINTS } from '../config/apiConfig';
+import axios from "axios";
 
-// Extrair apenas endpoints utilizados no service
-const { AUTH } = API_ENDPOINTS;
-
-// Criar instância do axios com configurações base
+// Instância central do axios. A baseURL aponta para /api (proxy do Vite),
+// que encaminha para a API HTTPS sem problemas de CORS/certificado.
 const api = axios.create({
-    baseURL: BASE_URL,
-    timeout: TIMEOUT,
-    headers: {
-        'Content-Type': 'application/json',
-    },
+  baseURL: import.meta.env.VITE_API_BASE_URL || "/api",
+  timeout: Number(import.meta.env.VITE_API_TIMEOUT) || 15000,
+  headers: { "Content-Type": "application/json" },
 });
 
-// Um interceptador é uma função que é executada antes ou depois de uma requisição
+// ── Tokens ────────────────────────────────────────────────────────────────
+export const TOKEN_KEY = "comandas.access_token";
+export const REFRESH_KEY = "comandas.refresh_token";
 
-// Interceptor de request para adicionar token nas requisições
-// Executado antes de cada requisição
-api.interceptors.request.use(
-    (config) => {
-        // Capturar o token da sessão
-        const token = sessionStorage.getItem('access_token');
-        if (token) {
-            // Adicionar o token ao cabeçalho da requisição
-            config.headers.Authorization = `Bearer ${token}`;
-        }
-        return config;
-    },
-    (error) => {
-        return Promise.reject(error);
-    }
-);
+export const getAccessToken = () => localStorage.getItem(TOKEN_KEY);
+export const getRefreshToken = () => localStorage.getItem(REFRESH_KEY);
 
+export const setTokens = ({ access_token, refresh_token } = {}) => {
+  if (access_token) localStorage.setItem(TOKEN_KEY, access_token);
+  if (refresh_token) localStorage.setItem(REFRESH_KEY, refresh_token);
+};
 
-// Interceptor de response para refresh automático de token
-// Executado após cada requisição
-// Interceptor de response para refresh automático de token
-// Executado após cada requisição
+export const clearTokens = () => {
+  localStorage.removeItem(TOKEN_KEY);
+  localStorage.removeItem(REFRESH_KEY);
+};
+
+// Extrai uma mensagem amigável do erro do axios/FastAPI
+export const apiErrorMessage = (error, fallback = "Ocorreu um erro inesperado.") => {
+  const detail = error?.response?.data?.detail;
+  if (typeof detail === "string") return detail;
+  if (Array.isArray(detail) && detail[0]?.msg) return detail[0].msg;
+  return error?.message || fallback;
+};
+
+// ── Interceptor de requisição: injeta o Bearer token ────────────────────────
+api.interceptors.request.use((config) => {
+  const token = getAccessToken();
+  if (token) config.headers.Authorization = `Bearer ${token}`;
+  return config;
+});
+
+// ── Interceptor de resposta: renova o access token em 401 (uma vez) ─────────
+let isRefreshing = false;
+let pendingQueue = [];
+
+const flushQueue = (error, token = null) => {
+  pendingQueue.forEach(({ resolve, reject }) =>
+    error ? reject(error) : resolve(token),
+  );
+  pendingQueue = [];
+};
 
 api.interceptors.response.use(
   (response) => response,
-
   async (error) => {
-    // Capturar a requisição original
-    const originalRequest = error.config;
+    const original = error.config;
+    const status = error.response?.status;
+    const isAuthCall = original?.url?.includes("/auth/");
 
-    // Se o erro for 401 e não for uma tentativa de refresh
-    if (
-      error.response?.status === 401 &&
-      !originalRequest._retry
-    ) {
-      originalRequest._retry = true;
+    if (status === 401 && !original?._retry && getRefreshToken() && !isAuthCall) {
+      if (isRefreshing) {
+        // Aguarda a renovação em andamento e refaz a requisição
+        return new Promise((resolve, reject) => {
+          pendingQueue.push({ resolve, reject });
+        }).then((token) => {
+          original.headers.Authorization = `Bearer ${token}`;
+          return api(original);
+        });
+      }
+
+      original._retry = true;
+      isRefreshing = true;
 
       try {
-        // Capturar o refresh token da sessão
-        const refreshToken =
-          sessionStorage.getItem(
-            "refresh_token"
-          );
-
-        if (refreshToken) {
-          // Fazer requisição na api para refresh token
-          const response =
-            await api.post(
-              AUTH.REFRESH,
-              {
-                refresh_token:
-                  refreshToken,
-              }
-            );
-
-          // Extrair os dados da resposta
-          const {
-            access_token,
-            refresh_token,
-            token_type,
-            expires_in,
-            refresh_expires_in,
-          } = response.data;
-
-          // Atualizar os dados do token na sessão
-          sessionStorage.setItem(
-            "access_token",
-            access_token
-          );
-
-          sessionStorage.setItem(
-            "refresh_token",
-            refresh_token
-          );
-
-          sessionStorage.setItem(
-            "token_type",
-            token_type
-          );
-
-          sessionStorage.setItem(
-            "expires_in",
-            expires_in
-          );
-
-          sessionStorage.setItem(
-            "refresh_expires_in",
-            refresh_expires_in
-          );
-
-          sessionStorage.setItem(
-            "loginRealizado",
-            "true"
-          );
-
-          // Calcular novo tempo de expiração
-          const now =
-            new Date().getTime();
-
-          const expiresAt =
-            now +
-            expires_in * 1000;
-
-          const refreshExpiresAt =
-            now +
-            refresh_expires_in *
-              1000;
-
-          sessionStorage.setItem(
-            "expires_at",
-            expiresAt
-          );
-
-          sessionStorage.setItem(
-            "refresh_expires_at",
-            refreshExpiresAt
-          );
-
-          // Refazer a requisição original com novo token
-          originalRequest.headers.Authorization =
-            `Bearer ${access_token}`;
-
-          return api(
-            originalRequest
-          );
-        }
-      } catch (refreshError) {
-        // Se o refresh falhar,
-        // limpar sessão e redirecionar para login
-
-        sessionStorage.clear();
-
-        window.location.href =
-          "/login";
-
-        return Promise.reject(
-          refreshError
+        const { data } = await axios.post(
+          `${api.defaults.baseURL}/auth/refresh`,
+          { refresh_token: getRefreshToken() },
         );
+        setTokens(data);
+        flushQueue(null, data.access_token);
+        original.headers.Authorization = `Bearer ${data.access_token}`;
+        return api(original);
+      } catch (refreshError) {
+        flushQueue(refreshError, null);
+        clearTokens();
+        // Sessão expirada: volta ao login
+        if (window.location.pathname !== "/login") {
+          window.location.assign("/login");
+        }
+        return Promise.reject(refreshError);
+      } finally {
+        isRefreshing = false;
       }
-    } else {
-      // Códigos de erro da API,
-      // diferente de 401:
-      // 400, 403, 404, 500
-
-      // Capturar mensagem de erro da API (detail)
-
-      const errorMessage =
-        error.response?.data
-          ?.detail ||
-        error.message ||
-        "Erro desconhecido";
-
-      // console.log("Erro da API:", errorMessage);
-      // console.log("Status:", error.response?.status);
-      // console.log("Data:", error.response?.data);
-
-      // Adicionar a mensagem de erro
-      // ao objeto error para uso posterior
-
-      error.apiMessage =
-        errorMessage;
     }
 
     return Promise.reject(error);
-  }
+  },
 );
-
-// Serviços genéricos da API
-export const apiService = {
-    // GET request
-    get: async (url, config = {}) => {
-    return api.get(url, config);
-    },
-    // POST request
-    post: async (url, data, config = {}) => {
-    return api.post(url, data, config);
-    },
-    // PUT request
-    put: async (url, data, config = {}) => {
-    return api.put(url, data, config);
-    },
-    // DELETE request
-    delete: async (url, config = {}) => {
-    return api.delete(url, config);
-    },
-};
 
 export default api;

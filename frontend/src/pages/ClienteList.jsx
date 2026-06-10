@@ -1,109 +1,158 @@
-import { useState } from 'react';
-import {
-  Table, TableBody, TableCell, TableContainer, TableHead, TableRow,
-  Paper, Button, Card, CardContent, Typography, Box, Divider
-} from '@mui/material';
-import { FiberNew } from '@mui/icons-material';
-import { useNavigate } from 'react-router-dom';
-import PageLayout from '../components/common/PageLayout';
-import ActionButtons from '../components/common/ActionButtons';
-import ConfirmDialog from '../components/common/ConfirmDialog';
-import showSnackbar from '../utils/snackbar';
+import { useEffect, useState, useCallback } from "react";
+import { useNavigate } from "react-router-dom";
+import { Plus, Pencil, Trash2 } from "lucide-react";
+import ConfirmDialog from "../components/common/ConfirmDialog";
+import showSnackbar from "../utils/snackbar";
+import { iniciais, ehDoGrupo } from "../utils/grupos";
+import { useAuth } from "../context/AuthContext";
+import { listClientes, deleteCliente } from "../services/clienteService";
+import { apiErrorMessage } from "../services/api";
 
-const mockClientes = [
-  { id: 1, nome: 'João Carlos Pereira', cpf: '444.555.666-77', telefone: '(49) 99111-2233', email: 'joao@email.com', cidade: 'Lages', bairro: 'Centro' },
-  { id: 2, nome: 'Maria Fernanda Costa', cpf: '555.666.777-88', telefone: '(49) 98222-3344', email: 'maria@email.com', cidade: 'Lages', bairro: 'Coral' },
-  { id: 3, nome: 'Roberto Alves Santos', cpf: '666.777.888-99', telefone: '(49) 97333-4455', email: 'roberto@email.com', cidade: 'Lages', bairro: 'Santa Helena' },
-];
+const formatCpf = (cpf = "") => {
+  const d = String(cpf).replace(/\D/g, "");
+  if (d.length !== 11) return cpf;
+  return `${d.slice(0, 3)}.${d.slice(3, 6)}.${d.slice(6, 9)}-${d.slice(9)}`;
+};
+
+const KPICard = ({ label, value, sub, accent }) => (
+  <div className="card card-pad" style={{ position: "relative", overflow: "hidden" }}>
+    {accent && <div style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: 3, background: "var(--accent)" }} />}
+    <div className="kpi-label" style={{ marginBottom: 8 }}>{label}</div>
+    <div className="kpi-value" style={accent ? { color: "var(--accent)" } : {}}>{value}</div>
+    {sub && <div style={{ fontSize: 12, color: "var(--ink-3)", marginTop: 8 }}>{sub}</div>}
+  </div>
+);
 
 const ClienteList = () => {
   const navigate = useNavigate();
+  const { usuario } = useAuth();
+  const podeCriarEditar = ehDoGrupo(usuario, [1, 3]);
+  const podeExcluir = ehDoGrupo(usuario, [1]);
+  const [clientes, setClientes] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [selected, setSelected] = useState(null);
 
-  const handleDelete = (item) => { setSelected(item); setConfirmOpen(true); };
-  const handleDeleteConfirm = () => {
-    showSnackbar(`Cliente "${selected?.nome}" removido da lista visual.`, 'success');
-    setConfirmOpen(false);
-  };
-  const handleEdit = (item) => navigate(`/cliente/${item.id}`);
-  const handleView = (item) => navigate(`/cliente/${item.id}?view=true`);
+  const carregar = useCallback(async () => {
+    try {
+      setClientes(await listClientes());
+    } catch (error) {
+      showSnackbar(apiErrorMessage(error, "Erro ao carregar clientes."), "error");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
-  const actions = (
-    <Button variant="contained" color="secondary" onClick={() => navigate('/cliente')} startIcon={<FiberNew />} sx={{ fontWeight: 600 }}>
-      Novo
-    </Button>
-  );
+  useEffect(() => { carregar(); }, [carregar]);
+
+  const handleDelete = async () => {
+    try {
+      await deleteCliente(selected.id);
+      showSnackbar(`Cliente "${selected.nome}" removido.`, "success");
+      setConfirmOpen(false);
+      setSelected(null);
+      carregar();
+    } catch (error) {
+      showSnackbar(apiErrorMessage(error, "Erro ao remover cliente."), "error");
+      setConfirmOpen(false);
+    }
+  };
 
   return (
-    <PageLayout title="Clientes" actions={actions}>
-      {/* Desktop */}
-      <Box sx={{ display: { xs: 'none', md: 'block' } }}>
-        <TableContainer component={Paper} elevation={0} sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 2 }}>
-          <Table>
-            <TableHead sx={{ bgcolor: 'grey.50' }}>
-              <TableRow>
-                {['Nome', 'CPF', 'Telefone', 'E-mail', 'Cidade', 'Ações'].map((h) => (
-                  <TableCell key={h} sx={{ fontWeight: 700, color: 'text.secondary', fontSize: '0.8rem', textTransform: 'uppercase', letterSpacing: 0.5 }}>
-                    {h}
-                  </TableCell>
-                ))}
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {mockClientes.map((c) => (
-                <TableRow key={c.id} hover sx={{ '&:last-child td': { borderBottom: 0 } }}>
-                  <TableCell sx={{ fontWeight: 600 }}>{c.nome}</TableCell>
-                  <TableCell>{c.cpf}</TableCell>
-                  <TableCell>{c.telefone}</TableCell>
-                  <TableCell>{c.email}</TableCell>
-                  <TableCell>{c.cidade}</TableCell>
-                  <TableCell>
-                    <ActionButtons item={c} onView={handleView} onEdit={handleEdit} onDelete={handleDelete} />
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </TableContainer>
-      </Box>
+    <div className="page-content">
+      {/* Header */}
+      <div className="page-header">
+        <div>
+          <div className="section-eyebrow">cadastro · {clientes.length} ativos</div>
+          <h1 style={{ fontSize: 28, fontWeight: 600, letterSpacing: "-0.025em", margin: "4px 0 0", color: "var(--ink)" }}>
+            Clientes
+          </h1>
+        </div>
+        {podeCriarEditar && (
+          <div className="page-header-actions">
+            <button className="btn btn-accent btn-lg" onClick={() => navigate("/cliente")}>
+              <Plus size={16} /> Novo cliente
+            </button>
+          </div>
+        )}
+      </div>
 
-      {/* Mobile */}
-      <Box sx={{ display: { xs: 'block', md: 'none' } }}>
-        {mockClientes.map((c) => (
-          <Card key={c.id} sx={{ mb: 2, borderRadius: 3 }} elevation={2}>
-            <CardContent sx={{ p: 2 }}>
-              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 1.5 }}>
-                <Box>
-                  <Typography variant="subtitle1" fontWeight={700}>{c.nome}</Typography>
-                  <Typography variant="caption" color="text.secondary">ID: {c.id}</Typography>
-                </Box>
-              </Box>
-              <Divider sx={{ mb: 1.5 }} />
-              <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 1, mb: 1.5 }}>
-                <Box><Typography variant="caption" color="text.secondary">CPF</Typography><Typography variant="body2" fontWeight={500}>{c.cpf}</Typography></Box>
-                <Box><Typography variant="caption" color="text.secondary">Telefone</Typography><Typography variant="body2" fontWeight={500}>{c.telefone}</Typography></Box>
-                <Box><Typography variant="caption" color="text.secondary">Cidade</Typography><Typography variant="body2" fontWeight={500}>{c.cidade}</Typography></Box>
-                <Box><Typography variant="caption" color="text.secondary">Bairro</Typography><Typography variant="body2" fontWeight={500}>{c.bairro}</Typography></Box>
-                <Box sx={{ gridColumn: '1/-1' }}><Typography variant="caption" color="text.secondary">E-mail</Typography><Typography variant="body2" fontWeight={500}>{c.email}</Typography></Box>
-              </Box>
-              <Box sx={{ display: 'flex', justifyContent: 'flex-end' }}>
-                <ActionButtons item={c} onView={handleView} onEdit={handleEdit} onDelete={handleDelete} />
-              </Box>
-            </CardContent>
-          </Card>
-        ))}
-      </Box>
+      {/* KPIs */}
+      <div className="kpi-grid-3" style={{ marginBottom: 18 }}>
+        <KPICard label="Clientes cadastrados" value={String(clientes.length)} sub="total na base" accent />
+        <KPICard label="Com endereço" value={String(clientes.filter((c) => c.endereco).length)} sub="entrega disponível" />
+        <KPICard label="Com telefone" value={String(clientes.filter((c) => c.telefone).length)} sub="contato cadastrado" />
+      </div>
+
+      {/* Table */}
+      {loading ? (
+        <div style={{ padding: 40, textAlign: "center", color: "var(--ink-3)" }}>Carregando…</div>
+      ) : clientes.length === 0 ? (
+        <div className="card card-pad" style={{ textAlign: "center", color: "var(--ink-3)" }}>
+          Nenhum cliente cadastrado.
+        </div>
+      ) : (
+        <div className="card" style={{ overflow: "hidden" }}>
+          <div className="tbl-scroll">
+            <table className="tbl">
+              <thead>
+                <tr>
+                  <th>cliente</th>
+                  <th>cpf</th>
+                  <th>contato</th>
+                  <th>endereço</th>
+                  <th />
+                </tr>
+              </thead>
+              <tbody>
+                {clientes.map((c) => (
+                  <tr key={c.id} style={{ cursor: podeCriarEditar ? "pointer" : "default" }}
+                    onClick={() => podeCriarEditar && navigate(`/cliente/${c.id}`)}>
+                    <td>
+                      <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                        <div className="avatar" style={{ width: 36, height: 36, fontSize: 11 }}>{iniciais(c.nome)}</div>
+                        <div style={{ fontSize: 13, fontWeight: 600 }}>{c.nome}</div>
+                      </div>
+                    </td>
+                    <td className="mono" style={{ fontSize: 12, color: "var(--ink-2)" }}>{formatCpf(c.cpf)}</td>
+                    <td className="mono" style={{ fontSize: 12, color: "var(--ink-2)" }}>{c.telefone}</td>
+                    <td style={{ fontSize: 12, color: "var(--ink-3)", maxWidth: 240, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.endereco}</td>
+                    <td onClick={(e) => e.stopPropagation()}>
+                      <div style={{ display: "flex", gap: 6 }}>
+                        {podeCriarEditar && (
+                          <button className="btn-icon" style={{ width: 32, height: 32 }} title="Editar"
+                            onClick={() => navigate(`/cliente/${c.id}`)}>
+                            <Pencil size={14} />
+                          </button>
+                        )}
+                        {podeExcluir && (
+                          <button className="btn-icon" style={{ width: 32, height: 32 }} title="Excluir"
+                            onClick={() => { setSelected(c); setConfirmOpen(true); }}>
+                            <Trash2 size={14} />
+                          </button>
+                        )}
+                        {!podeCriarEditar && !podeExcluir && (
+                          <span style={{ fontSize: 11, color: "var(--ink-4)" }}>—</span>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
 
       <ConfirmDialog
         open={confirmOpen}
         title="Excluir Cliente"
         message={`Tem certeza que deseja excluir "${selected?.nome}"?`}
         confirmLabel="Excluir"
-        onConfirm={handleDeleteConfirm}
+        onConfirm={handleDelete}
         onCancel={() => setConfirmOpen(false)}
       />
-    </PageLayout>
+    </div>
   );
 };
 

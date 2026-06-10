@@ -1,174 +1,79 @@
-import {
-  createContext,
-  useState,
-  useContext,
-  useEffect,
-} from "react";
-
+/* eslint-disable react-refresh/only-export-components */
+import { createContext, useContext, useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
+import showSnackbar from "../utils/snackbar";
+import { grupoLabel, iniciais } from "../utils/grupos";
+import * as authService from "../services/authService";
+import { getAccessToken, clearTokens, apiErrorMessage } from "../services/api";
 
-import { authService } from "../services/authService";
+const AuthContext = createContext(null);
 
-// =========================================
-// Criação do contexto
-// =========================================
-
-const AuthContext = createContext();
-
-// =========================================
-// Provedor do contexto
-// =========================================
+// Adiciona campos derivados (rótulo do grupo) ao usuário vindo de /auth/me
+const decorate = (u) => (u ? { ...u, grupoLabel: grupoLabel(u.grupo) } : null);
 
 export const AuthProvider = ({ children }) => {
-  const [isAuthenticated, setIsAuthenticated] =
-    useState(false);
-
-  const [user, setUser] = useState(null);
-
-  const [loading, setLoading] = useState(true);
-
   const navigate = useNavigate();
+  const [usuario, setUsuario] = useState(null);
+  const [isAuthenticated, setIsAuthenticated] = useState(() => !!getAccessToken());
+  const [loading, setLoading] = useState(() => !!getAccessToken());
 
-  // =========================================
-  // Verificar autenticação ao carregar o componente
-  // =========================================
-
+  // Restaura a sessão ao carregar a app: se há token, valida buscando /auth/me
   useEffect(() => {
-    const checkAuth = () => {
-      if (authService.isAuthenticated()) {
-        setIsAuthenticated(true);
-
-        // Buscar dados do usuário logado
-        authService
-          .getUserData()
-          .then((userData) => {
-            if (userData) {
-              setUser(userData);
-            }
-          });
-      }
-
+    let active = true;
+    if (!getAccessToken()) {
       setLoading(false);
+      return;
+    }
+    authService
+      .me()
+      .then((u) => {
+        if (!active) return;
+        setUsuario(decorate(u));
+        setIsAuthenticated(true);
+      })
+      .catch(() => {
+        if (!active) return;
+        clearTokens();
+        setIsAuthenticated(false);
+        setUsuario(null);
+      })
+      .finally(() => active && setLoading(false));
+    return () => {
+      active = false;
     };
-
-    checkAuth();
   }, []);
 
-  // =========================================
-  // Função para login com API real
-  // =========================================
-
-  const login = async (cpf, senha) => {
-    try {
-      setLoading(true);
-
-      // Chama o service de autenticação
-      // para fazer o login
-      const result =
-        await authService.login(
-          cpf,
-          senha
-        );
-
-      if (result.success) {
+  const login = useCallback(
+    async (cpf, senha) => {
+      try {
+        await authService.login(cpf, senha);
+        const u = await authService.me();
+        setUsuario(decorate(u));
         setIsAuthenticated(true);
-
-        // Buscar dados do usuário após login
-        const userData =
-          await authService.getUserData();
-
-        setUser(userData);
-
-        navigate("/home");
-
+        showSnackbar("Login realizado com sucesso.", "success");
+        navigate("/home", { replace: true });
         return true;
-      } else {
-        // Emite evento para SnackbarGlobal
-        window.dispatchEvent(
-          new CustomEvent(
-            "showSnackbar",
-            {
-              detail: {
-                message: result.error,
-                severity: "error",
-              },
-            }
-          )
-        );
-
+      } catch (error) {
+        showSnackbar(apiErrorMessage(error, "CPF ou senha inválidos."), "error");
         return false;
       }
-    } catch (error) {
-      console.error(
-        "Erro no login:",
-        error
-      );
-
-      window.dispatchEvent(
-        new CustomEvent(
-          "showSnackbar",
-          {
-            detail: {
-              message:
-                "Erro ao conectar com o servidor",
-              severity: "error",
-            },
-          }
-        )
-      );
-
-      return false;
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // =========================================
-  // Função para logout
-  // =========================================
-
-  const logout = () => {
-    authService.logout();
-
-    setIsAuthenticated(false);
-
-    setUser(null);
-  };
-
-  // =========================================
-  // Objeto com os valores e funções do contexto
-  // =========================================
-
-
-  // Função para obter as iniciais do usuário
-  const getIniciais = () => {
-    if (!user || !user.nome) return "?";
-    const nomes = user.nome.trim().split(" ");
-    if (nomes.length === 1) return nomes[0][0].toUpperCase();
-    return (nomes[0][0] + nomes[nomes.length - 1][0]).toUpperCase();
-  };
-
-  const value = {
-    isAuthenticated,
-    user,
-    usuario: user, // compatibilidade com Navbar
-    loading,
-    login,
-    logout,
-    getIniciais,
-    isTokenExpiringSoon: authService.isTokenExpiringSoon(),
-  };
-
-  return (
-    <AuthContext.Provider value={value}>
-      {children}
-    </AuthContext.Provider>
+    },
+    [navigate],
   );
+
+  const logout = useCallback(async () => {
+    await authService.logout();
+    setIsAuthenticated(false);
+    setUsuario(null);
+    showSnackbar("Sessão encerrada com sucesso.", "info");
+    navigate("/login", { replace: true });
+  }, [navigate]);
+
+  const getIniciais = () => iniciais(usuario?.nome);
+
+  const value = { isAuthenticated, usuario, loading, login, logout, getIniciais };
+
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };
 
-// =========================================
-// Hook para usar o contexto
-// =========================================
-
-export const useAuth = () =>
-  useContext(AuthContext);
+export const useAuth = () => useContext(AuthContext);
