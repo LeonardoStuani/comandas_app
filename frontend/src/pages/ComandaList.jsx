@@ -12,6 +12,7 @@ import ConfirmDialog from "../components/common/ConfirmDialog";
 import showSnackbar from "../utils/snackbar";
 import { useAuth } from "../context/AuthContext";
 import { COMANDA_STATUS, comandaStatusLabel, ehDoGrupo } from "../utils/grupos";
+import { parseApiDate } from "../utils/datetime";
 import { listComandas, createComanda, updateComanda, cancelComanda, deleteComanda } from "../services/comandaService";
 import { listClientes } from "../services/clienteService";
 import { listFuncionarios } from "../services/funcionarioService";
@@ -46,7 +47,7 @@ const StatusChip = ({ status }) => {
 
 const fmtData = (iso) => {
   if (!iso) return "—";
-  const d = new Date(iso);
+  const d = parseApiDate(iso);
   return d.toLocaleString("pt-BR", {
     day: "2-digit", month: "2-digit", year: "numeric",
     hour: "2-digit", minute: "2-digit", second: "2-digit",
@@ -102,7 +103,7 @@ const ComandaList = () => {
     return lista.filter((c) => {
       if (termo && !String(c.comanda ?? "").toLowerCase().includes(termo)) return false;
       if (ini || fim) {
-        const d = c.data_hora ? new Date(c.data_hora) : null;
+        const d = c.data_hora ? parseApiDate(c.data_hora) : null;
         if (!d) return false;
         if (ini && d < ini) return false;
         if (fim && d > fim) return false;

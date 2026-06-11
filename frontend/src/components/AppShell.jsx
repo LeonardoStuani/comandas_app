@@ -12,7 +12,7 @@ import { ehDoGrupo } from "../utils/grupos";
 const BREADCRUMBS = {
   "/home": "dashboard / hoje",
   "/comandas": "comandas / abertas",
-  "/caixa": "caixa / turno",
+  "/caixa": "caixa",
   "/produtos": "produtos / cardápio",
   "/clientes": "clientes / ativos",
   "/funcionarios": "equipe / funcionários",

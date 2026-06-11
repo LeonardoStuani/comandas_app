@@ -4,14 +4,14 @@ import {
   Dialog, DialogTitle, DialogContent, DialogActions,
   TextField, MenuItem, Button,
 } from "@mui/material";
-import { ArrowLeft, Plus, Pencil, Trash2, Wallet, Ban } from "lucide-react";
+import { ArrowLeft, Plus, Pencil, Trash2, Wallet } from "lucide-react";
 import ConfirmDialog from "../components/common/ConfirmDialog";
 import showSnackbar from "../utils/snackbar";
 import { useAuth } from "../context/AuthContext";
 import { COMANDA_STATUS, comandaStatusLabel, ehDoGrupo } from "../utils/grupos";
 import {
   getComanda, listComandaProdutos, addComandaProduto,
-  removeComandaProduto, updateComandaProduto, updateComanda, cancelComanda,
+  removeComandaProduto, updateComandaProduto,
 } from "../services/comandaService";
 import { listProdutos } from "../services/produtoService";
 import { apiErrorMessage } from "../services/api";
@@ -55,8 +55,6 @@ const ComandaAberta = () => {
 
   // Confirmações
   const [removeTarget, setRemoveTarget] = useState(null);
-  const [fecharOpen, setFecharOpen] = useState(false);
-  const [cancelarOpen, setCancelarOpen] = useState(false);
 
   const carregar = useCallback(async () => {
     try {
@@ -149,30 +147,6 @@ const ComandaAberta = () => {
       showSnackbar(apiErrorMessage(error, "Erro ao atualizar item."), "error");
     } finally {
       setSavingEdit(false);
-    }
-  };
-
-  const handleFechar = async () => {
-    try {
-      await updateComanda(id, { status: COMANDA_STATUS.FECHADA });
-      showSnackbar("Conta fechada com sucesso.", "success");
-      setFecharOpen(false);
-      navigate("/comandas");
-    } catch (error) {
-      showSnackbar(apiErrorMessage(error, "Erro ao fechar conta."), "error");
-      setFecharOpen(false);
-    }
-  };
-
-  const handleCancelar = async () => {
-    try {
-      await cancelComanda(id);
-      showSnackbar("Comanda cancelada.", "warning");
-      setCancelarOpen(false);
-      navigate("/comandas");
-    } catch (error) {
-      showSnackbar(apiErrorMessage(error, "Erro ao cancelar comanda."), "error");
-      setCancelarOpen(false);
     }
   };
 
@@ -293,22 +267,15 @@ const ComandaAberta = () => {
             </div>
 
             {isAberta ? (
-              podeAdmin ? (
-                <>
-                  <button className="btn btn-accent btn-lg btn-full" style={{ marginTop: 16 }}
-                    onClick={() => setFecharOpen(true)}>
-                    <Wallet size={16} /> Fechar conta
-                  </button>
-                  <button className="btn btn-full" style={{ marginTop: 8 }}
-                    onClick={() => setCancelarOpen(true)}>
-                    <Ban size={15} /> Cancelar comanda
-                  </button>
-                </>
-              ) : (
-                <div style={{ marginTop: 16, fontSize: 12, color: "var(--ink-3)", textAlign: "center" }}>
-                  Fechar/cancelar é exclusivo do Caixa/Administrador.
+              <>
+                <button className="btn btn-accent btn-lg btn-full" style={{ marginTop: 16 }}
+                  onClick={() => navigate("/caixa")}>
+                  <Wallet size={16} /> Receber no Caixa
+                </button>
+                <div style={{ marginTop: 10, fontSize: 12, color: "var(--ink-3)", textAlign: "center", lineHeight: 1.5 }}>
+                  O fechamento e o cancelamento da comanda são feitos exclusivamente pelo Caixa.
                 </div>
-              )
+              </>
             ) : (
               <div style={{ marginTop: 16, fontSize: 13, color: "var(--ink-3)", textAlign: "center" }}>
                 Comanda {comandaStatusLabel(comanda.status)} — somente leitura.
@@ -410,27 +377,6 @@ const ComandaAberta = () => {
         confirmLabel="Remover"
         onConfirm={handleRemove}
         onCancel={() => setRemoveTarget(null)}
-      />
-
-      <ConfirmDialog
-        open={fecharOpen}
-        title="Fechar conta"
-        message={`Confirmar o fechamento da comanda #${comanda.comanda} no valor de ${fmt(total)}?`}
-        confirmLabel="Fechar conta"
-        severity="info"
-        onConfirm={handleFechar}
-        onCancel={() => setFecharOpen(false)}
-      />
-
-      <ConfirmDialog
-        open={cancelarOpen}
-        title="Cancelar comanda"
-        message={`Deseja cancelar a comanda #${comanda.comanda}?`}
-        confirmLabel="Cancelar comanda"
-        cancelLabel="Voltar"
-        severity="warning"
-        onConfirm={handleCancelar}
-        onCancel={() => setCancelarOpen(false)}
       />
     </div>
   );

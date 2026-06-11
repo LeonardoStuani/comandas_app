@@ -4,12 +4,24 @@ import { useNavigate, useParams } from "react-router-dom";
 import {
   Box,
   Button,
+  FormHelperText,
   Grid,
   InputAdornment,
-  MenuItem,
   TextField,
+  ToggleButton,
+  ToggleButtonGroup,
+  Typography,
 } from "@mui/material";
-import { Badge, Fingerprint, Key, Person, Phone } from "@mui/icons-material";
+import {
+  AdminPanelSettings,
+  Badge,
+  Fingerprint,
+  Key,
+  Person,
+  Phone,
+  PointOfSale,
+  RoomService,
+} from "@mui/icons-material";
 import PageLayout from "../components/common/PageLayout";
 import FormSectionTitle from "../components/common/FormSectionTitle";
 import { useValidationRules } from "../hooks/useValidationRules";
@@ -23,6 +35,13 @@ import {
   updateFuncionario,
 } from "../services/funcionarioService";
 import { apiErrorMessage } from "../services/api";
+
+// Ícone e descrição curta de cada cargo, para o seletor de permissão.
+const GRUPO_INFO = {
+  1: { Icon: AdminPanelSettings, desc: "Acesso total ao sistema" },
+  2: { Icon: PointOfSale, desc: "Caixa e recebimentos" },
+  3: { Icon: RoomService, desc: "Comandas e atendimento" },
+};
 
 const FuncionarioForm = () => {
   const { id } = useParams();
@@ -111,7 +130,7 @@ const FuncionarioForm = () => {
       <Box component="form" onSubmit={handleSubmit(onSubmit)} noValidate>
         <FormSectionTitle>Dados Pessoais</FormSectionTitle>
         <Grid container spacing={2}>
-          <Grid item xs={12} md={8}>
+          <Grid size={{ xs: 12, md: 8 }}>
             <Controller
               name="nome"
               control={control}
@@ -138,7 +157,7 @@ const FuncionarioForm = () => {
             />
           </Grid>
 
-          <Grid item xs={12} md={4}>
+          <Grid size={{ xs: 12, md: 4 }}>
             <Controller
               name="cpf"
               control={control}
@@ -165,7 +184,7 @@ const FuncionarioForm = () => {
             />
           </Grid>
 
-          <Grid item xs={12} md={6}>
+          <Grid size={{ xs: 12, md: 6 }}>
             <Controller
               name="telefone"
               control={control}
@@ -192,7 +211,7 @@ const FuncionarioForm = () => {
             />
           </Grid>
 
-          <Grid item xs={12} md={6}>
+          <Grid size={{ xs: 12, md: 6 }}>
             <Controller
               name="matricula"
               control={control}
@@ -221,7 +240,7 @@ const FuncionarioForm = () => {
 
         <FormSectionTitle>Acesso ao Sistema</FormSectionTitle>
         <Grid container spacing={2}>
-          <Grid item xs={12} md={6}>
+          <Grid size={{ xs: 12, md: 6 }}>
             <Controller
               name="senha"
               control={control}
@@ -247,28 +266,83 @@ const FuncionarioForm = () => {
             />
           </Grid>
 
-          <Grid item xs={12} md={6}>
+          <Grid size={{ xs: 12 }}>
             <Controller
               name="grupo"
               control={control}
               rules={rules.grupo}
               render={({ field }) => (
-                <TextField
-                  {...field}
-                  select
-                  fullWidth
-                  label="Grupo / Cargo *"
-                  error={!!errors.grupo}
-                  helperText={errors.grupo?.message}
-                  SelectProps={{ displayEmpty: true }}
-                >
-                  <MenuItem value="">Selecione...</MenuItem>
-                  {GRUPOS.map((g) => (
-                    <MenuItem key={g.value} value={g.value}>
-                      {g.value} · {g.label}
-                    </MenuItem>
-                  ))}
-                </TextField>
+                <Box>
+                  <Typography
+                    variant="caption"
+                    sx={{
+                      display: "block",
+                      mb: 1,
+                      fontWeight: 600,
+                      color: errors.grupo ? "error.main" : "text.secondary",
+                    }}
+                  >
+                    Grupo / Cargo *
+                  </Typography>
+                  <ToggleButtonGroup
+                    exclusive
+                    color="secondary"
+                    value={field.value === "" ? null : field.value}
+                    onChange={(_, val) => {
+                      if (val !== null) field.onChange(val);
+                    }}
+                    sx={{
+                      display: "grid",
+                      gridTemplateColumns: { xs: "1fr", sm: "repeat(3, 1fr)" },
+                      gap: 1.5,
+                      width: "100%",
+                      "& .MuiToggleButtonGroup-grouped": {
+                        border: "1px solid var(--line-2)",
+                        borderRadius: "10px",
+                      },
+                    }}
+                  >
+                    {GRUPOS.map((g) => {
+                      const { Icon, desc } = GRUPO_INFO[g.value] ?? {};
+                      return (
+                        <ToggleButton
+                          key={g.value}
+                          value={g.value}
+                          sx={{
+                            flexDirection: "column",
+                            alignItems: "flex-start",
+                            gap: 0.5,
+                            p: 1.75,
+                            textTransform: "none",
+                            textAlign: "left",
+                            color: "text.secondary",
+                            "&.Mui-selected": {
+                              bgcolor: "var(--accent-bg)",
+                              borderColor: "var(--accent) !important",
+                              color: "var(--accent)",
+                              "&:hover": { bgcolor: "var(--accent-bg)" },
+                            },
+                          }}
+                        >
+                          <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                            {Icon && <Icon fontSize="small" />}
+                            <Typography sx={{ fontWeight: 600, fontSize: 14, color: "text.primary" }}>
+                              {g.label}
+                            </Typography>
+                          </Box>
+                          <Typography sx={{ fontSize: 11, color: "text.secondary", lineHeight: 1.3 }}>
+                            {desc}
+                          </Typography>
+                        </ToggleButton>
+                      );
+                    })}
+                  </ToggleButtonGroup>
+                  {errors.grupo && (
+                    <FormHelperText error sx={{ mt: 0.75, mx: 0 }}>
+                      {errors.grupo.message}
+                    </FormHelperText>
+                  )}
+                </Box>
               )}
             />
           </Grid>

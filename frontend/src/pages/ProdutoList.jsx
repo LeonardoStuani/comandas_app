@@ -74,45 +74,39 @@ const ProdutoList = () => {
         </div>
       ) : (
         <div className="card-grid-4">
-          {produtos.map((p) => (
-            <div
-              key={p.id_produto}
-              className="card"
-              style={{ padding: 14, display: "flex", flexDirection: "column", gap: 12 }}
-            >
-              {produtoFotoSrc(p.foto) ? (
-                <img
-                  src={produtoFotoSrc(p.foto)}
-                  alt={p.nome}
-                  loading="lazy"
-                  style={{ height: 110, width: "100%", objectFit: "cover", borderRadius: 8, display: "block" }}
-                />
-              ) : (
-                <div className="hatch" style={{ height: 110 }}>sem foto</div>
-              )}
-              <div>
-                <div style={{ fontSize: 14, fontWeight: 600 }}>{p.nome}</div>
-                <div style={{ fontSize: 11, color: "var(--ink-3)", marginTop: 2, minHeight: 28, overflow: "hidden" }}>
-                  {p.descricao}
+          {produtos.map((p) => {
+            const src = produtoFotoSrc(p.foto);
+            return (
+              <div key={p.id_produto} className="card prod-card">
+                <div className="prod-card__media">
+                  {src ? (
+                    <img src={src} alt={p.nome} loading="lazy" className="prod-card__img" />
+                  ) : (
+                    <div className="hatch prod-card__img">sem foto</div>
+                  )}
                 </div>
-                <div className="mono" style={{ fontSize: 18, fontWeight: 700, marginTop: 10, color: "var(--accent)", letterSpacing: "-0.02em" }}>
-                  {fmt(p.valor_unitario)}
+                <div className="prod-card__body">
+                  <div className="prod-card__top">
+                    <span className="prod-card__name">{p.nome}</span>
+                    <span className="prod-card__price">{fmt(p.valor_unitario)}</span>
+                  </div>
+                  <div className="prod-card__desc">{p.descricao}</div>
                 </div>
+                {podeGerenciar && (
+                  <div className="prod-card__actions">
+                    <button className="btn btn-ghost btn-sm" style={{ flex: 1 }}
+                      onClick={() => navigate(`/produto/${p.id_produto}`)}>
+                      <Pencil size={13} /> Editar
+                    </button>
+                    <button className="btn-icon" style={{ width: 30, height: 30 }} title="Excluir"
+                      onClick={() => { setSelected(p); setConfirmOpen(true); }}>
+                      <Trash2 size={13} />
+                    </button>
+                  </div>
+                )}
               </div>
-              {podeGerenciar && (
-                <div style={{ display: "flex", gap: 6, marginTop: "auto" }}>
-                  <button className="btn btn-ghost btn-sm" style={{ flex: 1 }}
-                    onClick={() => navigate(`/produto/${p.id_produto}`)}>
-                    <Pencil size={13} /> Editar
-                  </button>
-                  <button className="btn-icon" style={{ width: 32, height: 32 }} title="Excluir"
-                    onClick={() => { setSelected(p); setConfirmOpen(true); }}>
-                    <Trash2 size={14} />
-                  </button>
-                </div>
-              )}
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
 

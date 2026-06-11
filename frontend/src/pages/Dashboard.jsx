@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { Plus, TrendingUp, Users, Package, Receipt } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { COMANDA_STATUS, comandaStatusLabel } from "../utils/grupos";
+import { parseApiDate } from "../utils/datetime";
 import { listComandas, listComandaProdutos } from "../services/comandaService";
 import { listProdutos } from "../services/produtoService";
 import { listClientes } from "../services/clienteService";
@@ -17,11 +18,11 @@ const fmt = (v) =>
 
 const fmtData = (iso) => {
   if (!iso) return "—";
-  return new Date(iso).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+  return parseApiDate(iso).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
 };
 
 const mesmaData = (a, b) => {
-  const d = new Date(a);
+  const d = parseApiDate(a);
   return d.getDate() === b.getDate() && d.getMonth() === b.getMonth() && d.getFullYear() === b.getFullYear();
 };
 

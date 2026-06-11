@@ -4,7 +4,10 @@ import {
 } from "lucide-react";
 import showSnackbar from "../utils/snackbar";
 import { COMANDA_STATUS } from "../utils/grupos";
-import { listComandas, listComandaProdutos, updateComanda } from "../services/comandaService";
+import { useAuth } from "../context/AuthContext";
+import { parseApiDate } from "../utils/datetime";
+import { listComandas, listComandaProdutos } from "../services/comandaService";
+import { receberComandas, getComprovante } from "../services/recebimentoService";
 import { listClientes } from "../services/clienteService";
 import { listProdutos } from "../services/produtoService";
 import { produtoFotoSrc } from "../utils/produtoFoto";
@@ -15,7 +18,7 @@ const fmt = (v) =>
 
 const fmtHora = (iso) => {
   if (!iso) return "—";
-  return new Date(iso).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+  return parseApiDate(iso).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
 };
 
 const fmtDataHora = (d) =>
@@ -27,6 +30,7 @@ const fmtDataHora = (d) =>
 const FORMAS = ["Dinheiro", "Pix", "Cartão de crédito", "Cartão de débito"];
 
 const CaixaPage = () => {
+  const { usuario } = useAuth();
   const [comandas, setComandas] = useState([]); // abertas, com { itens, total }
   const [loading, setLoading] = useState(true);
   const [clientes, setClientes] = useState([]);
@@ -130,35 +134,54 @@ const CaixaPage = () => {
       showSnackbar("Selecione ao menos uma comanda.", "error");
       return;
     }
+    if (!usuario?.id) {
+      showSnackbar("Sessão inválida. Faça login novamente.", "error");
+      return;
+    }
     setFinalizando(true);
 
-    // Snapshot da venda para a nota (antes de limpar/recarregar).
-    const snapshot = {
-      comandas: selecionadas.map((c) => ({ id: c.id, comanda: c.comanda })),
-      itens: consolidado,
-      subtotal,
-      desconto: descontoNum,
-      acrescimo: acrescimoNum,
-      total: totalFinal,
-      forma,
-      cliente: clienteSelecionado,
-      data: new Date(),
-    };
-    setNota(snapshot);
-
-    // Fecha as comandas pagas (status FECHADA).
     try {
-      await Promise.all(
-        selecionadas.map((c) => updateComanda(c.id, { status: COMANDA_STATUS.FECHADA })),
-      );
-      showSnackbar("Pagamento finalizado e comandas fechadas.", "success");
+      // 1) Recebimento completo no backend: fecha as comandas (status 1),
+      //    registra o funcionário, a data/hora, descontos/acréscimos e o valor final.
+      const resp = await receberComandas({
+        comandas_ids: selecionadas.map((c) => c.id),
+        funcionario_id: usuario.id,
+        cliente_id: clienteId ? Number(clienteId) : null,
+        desconto_valor: descontoNum || null,
+        acrescimo_valor: acrescimoNum || null,
+      });
+
+      // 2) Comprovante detalhado gerado pela API (não bloqueia se indisponível).
+      let comprovante = null;
+      if (resp?.recebimento_id != null) {
+        try {
+          comprovante = await getComprovante(resp.recebimento_id);
+        } catch {
+          comprovante = null;
+        }
+      }
+
+      // 3) Monta a nota usando os valores retornados pelo backend.
+      setNota({
+        recebimentoId: resp?.recebimento_id ?? null,
+        comandas: selecionadas.map((c) => ({ id: c.id, comanda: c.comanda })),
+        itens: consolidado,
+        subtotal: resp?.subtotal_geral ?? subtotal,
+        desconto: resp?.desconto_total ?? descontoNum,
+        acrescimo: resp?.acrescimo_total ?? acrescimoNum,
+        total: resp?.valor_final ?? totalFinal,
+        forma,
+        cliente: resp?.cliente ?? clienteSelecionado,
+        funcionario: resp?.funcionario ?? null,
+        data: resp?.data_hora ? parseApiDate(resp.data_hora) : new Date(),
+        comprovante,
+      });
+
+      showSnackbar(resp?.mensagem || "Recebimento efetuado e comandas fechadas.", "success");
       limpar();
       carregar();
     } catch (error) {
-      showSnackbar(
-        apiErrorMessage(error, "Nota gerada, mas não foi possível fechar as comandas automaticamente."),
-        "warning",
-      );
+      showSnackbar(apiErrorMessage(error, "Não foi possível efetuar o recebimento."), "error");
     } finally {
       setFinalizando(false);
     }
@@ -366,9 +389,12 @@ const CaixaPage = () => {
           <div className="nota-print">
             <div style={{ textAlign: "center", marginBottom: 8 }}>
               <div style={{ fontSize: 16, fontWeight: 700, letterSpacing: "1px" }}>COMANDAS STUANI</div>
-              <div style={{ fontSize: 10 }}>Cupom de conferência — não fiscal</div>
+              <div style={{ fontSize: 10 }}>Comprovante de recebimento — não fiscal</div>
             </div>
             <hr className="nota-sep" />
+            {nota.recebimentoId != null && (
+              <div className="nota-row"><span>Recebimento</span><span>Nº {nota.recebimentoId}</span></div>
+            )}
             <div className="nota-row"><span>Data</span><span>{fmtDataHora(nota.data)}</span></div>
             <div className="nota-row">
               <span>{nota.comandas.length > 1 ? "Comandas" : "Comanda"}</span>
@@ -376,6 +402,9 @@ const CaixaPage = () => {
             </div>
             {nota.cliente && (
               <div className="nota-row"><span>Cliente</span><span>{nota.cliente.nome}</span></div>
+            )}
+            {nota.funcionario?.nome && (
+              <div className="nota-row"><span>Atendente</span><span>{nota.funcionario.nome}</span></div>
             )}
             <hr className="nota-sep" />
             <div style={{ display: "flex", justifyContent: "space-between", fontWeight: 700 }}>

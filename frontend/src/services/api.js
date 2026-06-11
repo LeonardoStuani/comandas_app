@@ -28,7 +28,20 @@ export const clearTokens = () => {
 // Extrai uma mensagem amigável do erro do axios/FastAPI
 export const apiErrorMessage = (error, fallback = "Ocorreu um erro inesperado.") => {
   const detail = error?.response?.data?.detail;
-  if (typeof detail === "string") return detail;
+
+  // Erros de integridade do banco (FK ON DELETE RESTRICT) vêm como texto cru do SQL.
+  // Traduz para algo legível em vez de mostrar a query inteira na tela.
+  if (typeof detail === "string") {
+    const low = detail.toLowerCase();
+    if (low.includes("integrityerror") || low.includes("foreign key constraint")) {
+      if (low.includes("comanda")) {
+        return "Este produto não pode ser excluído porque já foi usado em comandas.";
+      }
+      return "Este registro não pode ser excluído porque está vinculado a outros dados.";
+    }
+    return detail;
+  }
+
   if (Array.isArray(detail) && detail[0]?.msg) return detail[0].msg;
   return error?.message || fallback;
 };
