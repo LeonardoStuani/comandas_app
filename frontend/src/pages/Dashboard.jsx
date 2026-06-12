@@ -1,3 +1,4 @@
+//Leonardo Stuani Godoi
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Plus, TrendingUp, Users, Package, Receipt } from "lucide-react";

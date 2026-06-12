@@ -1,3 +1,4 @@
+//Leonardo Stuani Godoi
 // Mapeamento dos grupos (cargos) usados pelo backend.
 // O backend trabalha com inteiros; aqui ligamos número <-> rótulo.
 // require_group([1]) = só Administrador | require_group([1, 3]) = Admin e Garçom

@@ -1,3 +1,4 @@
+//Leonardo Stuani Godoi
 import api from "./api";
 
 // ── Módulo Caixa / Recebimento ──────────────────────────────────────────────

@@ -1,3 +1,4 @@
+//Leonardo Stuani Godoi
 import api from "./api";
 
 // GET /comanda/ com filtros opcionais (status, skip, limit, cliente_id, funcionario_id)

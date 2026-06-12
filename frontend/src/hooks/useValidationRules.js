@@ -1,3 +1,4 @@
+//Leonardo Stuani Godoi
 export const useValidationRules = () => ({
   nome: {
     required: "Nome e obrigatorio.",

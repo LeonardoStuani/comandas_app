@@ -1,3 +1,4 @@
+//Leonardo Stuani Godoi
 import api from "./api";
 
 // GET /funcionario/ (requer grupo 1)

@@ -1,3 +1,4 @@
+//Leonardo Stuani Godoi
 // Monta uma src utilizável em <img> a partir do campo `foto` do produto.
 // O backend pode devolver:
 //   - uma data URL completa: "data:image/png;base64,iVBOR..." (cadastros novos)

@@ -1,3 +1,4 @@
+//Leonardo Stuani Godoi
 export const stripMask = (value = "") => value.replace(/\D/g, "");
 
 export const applyMaskCPF = (value = "") => {

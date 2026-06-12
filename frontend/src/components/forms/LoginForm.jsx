@@ -1,3 +1,4 @@
+//Leonardo Stuani Godoi
 import { useRef, useState } from "react";
 import { Sun, Moon, ArrowRight, Fingerprint, Lock } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";

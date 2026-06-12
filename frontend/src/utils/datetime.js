@@ -1,3 +1,4 @@
+//Leonardo Stuani Godoi
 // A API devolve datas/horas SEM informação de fuso (ex.: "2026-06-11T00:43:00"),
 // mas o valor é UTC (o servidor roda em UTC). O JavaScript, ao ler uma string ISO
 // sem fuso, interpreta como hora LOCAL — o que deixava os horários ~3h adiantados

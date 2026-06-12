@@ -1,3 +1,4 @@
+//Leonardo Stuani Godoi
 import { useEffect, useState, useCallback, useMemo } from "react";
 import {
   ShoppingCart, RefreshCw, X, User, Printer, Receipt, CheckCircle2,
